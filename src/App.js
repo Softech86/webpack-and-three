@@ -1,6 +1,8 @@
 import React, { Component } from 'react';
-import * as THREE from 'three';
 import './App.css';
+import 'normalize.css'
+
+import { Playground } from './3d.js'
 
 class App extends Component {
 
@@ -19,25 +21,10 @@ class App extends Component {
   }
 
   componentDidMount () {
-    var scene = new THREE.Scene();
-    var camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+    const playground = new Playground(true)
+    this.setState( { element: playground.getDomElement() } );
 
-    var renderer = new THREE.WebGLRenderer();
-    renderer.setSize( window.innerWidth, window.innerHeight );
-    this.setState( { element: renderer.domElement } );
-
-    var geometry = new THREE.BoxGeometry( 1, 1, 1 );
-    var material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
-    var cube = new THREE.Mesh( geometry, material );
-    scene.add( cube );
-
-    camera.position.z = 5;
-
-    function render() {
-      requestAnimationFrame( render );
-      renderer.render( scene, camera );
-    }
-    render();
+    playground.startRender()
   }
 
 }
