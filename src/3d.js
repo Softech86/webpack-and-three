@@ -21,34 +21,40 @@ function delay(duration=1000) {
     return new Promise((resolve, reject) => setTimeout(resolve, duration))
 }
 
-class Cube {
-    constructor({size, position, color}) {
+class Object3d {
+    constructor({Geometry, Material}, {size, position, color}) {
         this.size = size || [10, 4, 10]
         this.position = position || [0, 20, 0]
         this.color = color || COLOR.yellow
 
-        const cubeGeometry = new Three.BoxGeometry(...this.size)
-        const cubeMaterial = new Three.MeshLambertMaterial({
+        const cubeGeometry = new Geometry(...this.size)
+        const cubeMaterial = new Material({
             color: this.color
         })
-        const cube = new Three.Mesh(cubeGeometry, cubeMaterial)
-        cube.castShadow = true
-        cube.position.set(...this.position)
-        this.cube = cube
+        const object = new Three.Mesh(cubeGeometry, cubeMaterial)
+        object.castShadow = true
+        object.position.set(...this.position)
+        this.object = object
 
         return this
     }
 
-    moveTo(position, duration = 1000, easing = Tween.Easing.Linear.None) {
+    moveTo({position, duration = 1000, easing = Tween.Easing.Linear.None}) {
         return new Promise((resolve, reject) => {
-            new Tween.Tween(this.cube.position).to(new Three.Vector3(...position), duration).easing(easing).onComplete(resolve).start()
+            new Tween.Tween(this.object.position).to(new Three.Vector3(...position), duration).easing(easing).onComplete(resolve).start()
         })
     }
 
-    moveBy(position, duration = 1000, easing = Tween.Easing.Linear.None) {
+    moveBy({position, duration = 1000, easing = Tween.Easing.Linear.None}) {
         return new Promise((resolve, reject) => {
-            new Tween.Tween(this.cube.position).to(new Three.Vector3(...position).add(this.cube.position), duration).easing(easing).onComplete(resolve).start()
+            new Tween.Tween(this.object.position).to(new Three.Vector3(...position).add(this.object.position), duration).easing(easing).onComplete(resolve).start()
         })
+    }
+}
+
+class Cube extends Object3d {
+    constructor(props) {
+        super({Geometry: Three.BoxGeometry, Material: Three.MeshLambertMaterial}, props)
     }
 }
 
@@ -233,18 +239,18 @@ export class Playground {
         const cubes = []
         for (let i = 0; i < 10; ++i) {
             cubes.forEach(c => {
-                c.moveBy([-20, 0, 0], 1000, Tween.Easing.Cubic.Out)
+                c.moveBy({position: [-20, 0, 0], duration: 1000, easing: Tween.Easing.Cubic.Out})
             })
-            await delay(800)
+            await delay(400)
 
             const color = COLOR[Object.keys(COLOR)[parseInt(Math.random() * 8)]]
             const c = new Cube({color})
-            this.scene.add(c.cube)
-            await c.moveTo([0, 2, 0], 1000, Tween.Easing.Bounce.Out)
+            this.scene.add(c.object)
+            await c.moveTo({position: [0, 2, 0], duration: 1000, easing: Tween.Easing.Bounce.Out})
             
             cubes.push(c)
             cubes.slice(-5, -4).forEach(c => {
-                this.scene.remove(c.cube)
+                this.scene.remove(c.object)
             })
             window.c = c
         }
