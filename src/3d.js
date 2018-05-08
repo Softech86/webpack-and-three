@@ -1,8 +1,9 @@
 import * as Three from 'three'
+import Tween from 'tween.js'
 import OrbitControls from './util/OrbitControls.js'
 
-import * as dat from 'dat.gui'
-import * as Stats from 'stats-js'
+import dat from 'dat.gui'
+import Stats from 'stats-js'
 
 const COLOR = {
     white: 0xffffff,
@@ -12,6 +13,43 @@ const COLOR = {
     black: 0x000000,
     red: 0xff4444,
     yellow: 0xffff00
+}
+
+window.Tween = Tween
+
+function delay(duration=1000) {
+    return new Promise((resolve, reject) => setTimeout(resolve, duration))
+}
+
+class Cube {
+    constructor({size, position, color}) {
+        this.size = size || [10, 4, 10]
+        this.position = position || [0, 20, 0]
+        this.color = color || COLOR.yellow
+
+        const cubeGeometry = new Three.BoxGeometry(...this.size)
+        const cubeMaterial = new Three.MeshLambertMaterial({
+            color: this.color
+        })
+        const cube = new Three.Mesh(cubeGeometry, cubeMaterial)
+        cube.castShadow = true
+        cube.position.set(...this.position)
+        this.cube = cube
+
+        return this
+    }
+
+    moveTo(position, duration = 1000, easing = Tween.Easing.Linear.None) {
+        return new Promise((resolve, reject) => {
+            new Tween.Tween(this.cube.position).to(new Three.Vector3(...position), duration).easing(easing).onComplete(resolve).start()
+        })
+    }
+
+    moveBy(position, duration = 1000, easing = Tween.Easing.Linear.None) {
+        return new Promise((resolve, reject) => {
+            new Tween.Tween(this.cube.position).to(new Three.Vector3(...position).add(this.cube.position), duration).easing(easing).onComplete(resolve).start()
+        })
+    }
 }
 
 class UpdateManager {
@@ -49,6 +87,7 @@ export class Playground {
         this.initLight()
         this.initControl()
         this.initObjects()
+        this.initAnimations()
     }
 
     initThree() {
@@ -175,28 +214,41 @@ export class Playground {
         const floorMaterial = new Three.MeshPhongMaterial({
             color: COLOR.lightGray
         })
-        var floorMesh = new Three.Mesh(floorGeometry, floorMaterial);
+        const floorMesh = new Three.Mesh(floorGeometry, floorMaterial);
         floorMesh.receiveShadow = true;
         floorMesh.rotation.x = -Math.PI / 2.0;
         this.scene.add(floorMesh);
 
-        const cubeGeometry = new Three.BoxGeometry(10, 10, 10)
-        const cubeMaterial = new Three.MeshLambertMaterial({
-            color: COLOR.yellow
-        })
+    }
 
-        // const cube = new Three.Mesh(cubeGeometry, cubeMaterial)
-        // cube.position.y = 10
-        // cube.castShadow = true
-        // UpdateManager.getInstance().addUpdateFunction(cube, function () {
-        //     this.rotation.x += .01
-        //     this.rotation.y += .01
-        // })
-        // this.scene.add(cube)
+    async initAnimations() {
+        // const cube = new Cube()
+        // this.scene.add(cube.cube)
+        // window.c = cube 
+        // await cube.moveTo([0, 2, 0], 1000, Tween.Easing.Bounce.Out)
+        // await delay(500)
+        // await cube.moveBy([10, 0, 0])
+        // await cube.moveTo([0, 20, 0])
 
-        const start = new Three.Mesh(cubeGeometry, cubeMaterial)
-        start.castShadow = true
-        this.scene.add(start)
+        const cubes = []
+        for (let i = 0; i < 10; ++i) {
+            cubes.forEach(c => {
+                c.moveBy([-20, 0, 0], 1000, Tween.Easing.Cubic.Out)
+            })
+            await delay(800)
+
+            const color = COLOR[Object.keys(COLOR)[parseInt(Math.random() * 8)]]
+            const c = new Cube({color})
+            this.scene.add(c.cube)
+            await c.moveTo([0, 2, 0], 1000, Tween.Easing.Bounce.Out)
+            
+            cubes.push(c)
+            cubes.slice(-5, -4).forEach(c => {
+                this.scene.remove(c.cube)
+            })
+            window.c = c
+        }
+        
     }
 
     render() {
@@ -205,6 +257,7 @@ export class Playground {
         }
         this.animationFrame = requestAnimationFrame(this.render.bind(this))
 
+        Tween.update()
         this.manager.execute()
         this.renderer.render(this.scene, this.camera)
 
