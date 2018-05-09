@@ -5,57 +5,25 @@ import OrbitControls from './util/OrbitControls.js'
 import dat from 'dat.gui'
 import Stats from 'stats-js'
 
-const COLOR = {
-    white: 0xffffff,
-    lightGray: 0xdddddd,
-    gray: 0x909090,
-    darkGray: 0x404040,
-    black: 0x000000,
-    red: 0xff4444,
-    yellow: 0xffff00
-}
+import {
+    Cube,
+    Hero
+} from './class/Object.js'
+import {
+    COLOR
+} from './util/config.js'
+import {
+    random
+} from 'lodash'
+import {
+    create
+} from 'handlebars';
 
 window.Tween = Tween
+window.Three = Three
 
-function delay(duration=1000) {
+function delay(duration = 1000) {
     return new Promise((resolve, reject) => setTimeout(resolve, duration))
-}
-
-class Object3d {
-    constructor({Geometry, Material}, {size, position, color}) {
-        this.size = size || [10, 4, 10]
-        this.position = position || [0, 20, 0]
-        this.color = color || COLOR.yellow
-
-        const cubeGeometry = new Geometry(...this.size)
-        const cubeMaterial = new Material({
-            color: this.color
-        })
-        const object = new Three.Mesh(cubeGeometry, cubeMaterial)
-        object.castShadow = true
-        object.position.set(...this.position)
-        this.object = object
-
-        return this
-    }
-
-    moveTo({position, duration = 1000, easing = Tween.Easing.Linear.None}) {
-        return new Promise((resolve, reject) => {
-            new Tween.Tween(this.object.position).to(new Three.Vector3(...position), duration).easing(easing).onComplete(resolve).start()
-        })
-    }
-
-    moveBy({position, duration = 1000, easing = Tween.Easing.Linear.None}) {
-        return new Promise((resolve, reject) => {
-            new Tween.Tween(this.object.position).to(new Three.Vector3(...position).add(this.object.position), duration).easing(easing).onComplete(resolve).start()
-        })
-    }
-}
-
-class Cube extends Object3d {
-    constructor(props) {
-        super({Geometry: Three.BoxGeometry, Material: Three.MeshLambertMaterial}, props)
-    }
 }
 
 class UpdateManager {
@@ -170,7 +138,7 @@ export class Playground {
         const light = new Three.AmbientLight(COLOR.gray); // soft white light
         this.scene.add(light);
 
-        var spotLight = new Three.SpotLight(0xffffff, 2)
+        var spotLight = new Three.SpotLight(0xffffff, .8)
         spotLight.position.set(30, 100, 20)
         spotLight.castShadow = true
 
@@ -228,33 +196,98 @@ export class Playground {
     }
 
     async initAnimations() {
-        // const cube = new Cube()
-        // this.scene.add(cube.cube)
-        // window.c = cube 
-        // await cube.moveTo([0, 2, 0], 1000, Tween.Easing.Bounce.Out)
-        // await delay(500)
-        // await cube.moveBy([10, 0, 0])
-        // await cube.moveTo([0, 20, 0])
-
         const cubes = []
-        for (let i = 0; i < 10; ++i) {
-            cubes.forEach(c => {
-                c.moveBy({position: [-20, 0, 0], duration: 1000, easing: Tween.Easing.Cubic.Out})
-            })
-            await delay(400)
 
-            const color = COLOR[Object.keys(COLOR)[parseInt(Math.random() * 8)]]
-            const c = new Cube({color})
-            this.scene.add(c.object)
-            await c.moveTo({position: [0, 2, 0], duration: 1000, easing: Tween.Easing.Bounce.Out})
-            
-            cubes.push(c)
-            cubes.slice(-5, -4).forEach(c => {
-                this.scene.remove(c.object)
+        const createCube = (position = [20, 20, 0]) => {
+
+            const cube = new Cube({
+                position
             })
-            window.c = c
+            this.scene.add(cube.object)
+
+            const distance = random(3, 6) * 5 // [15, 30] with step 5
+
+            return {
+                cube,
+                distance
+            }
         }
-        
+
+        const moveCubes = async () => {
+            const cubeInfo = createCube()
+
+            const promises = [...cubes.map(({
+                    cube
+                }) =>
+                cube.moveBy({
+                    position: [-cubeInfo.distance, 0, 0],
+                    duration: cubeInfo.distance / 20 * 1000,
+                    easing: Tween.Easing.Cubic.Out
+                })
+            ), cubeInfo.cube.fall()]
+            await Promise.all(promises)
+
+            cubes.push(cubeInfo)
+
+            if (cubes.length > 6) {
+                const dumpedCube = cubes.splice(0, 1)[0]
+                this.scene.remove(dumpedCube.cube.object)
+            }
+        }
+
+        let mutex = 0
+
+        // cubes.push(...[0, 20].map(x => createCube([x, 20, 0])))
+        window.cubes = cubes
+
+
+        const hero = new Hero({
+            position: [0, 24, 0]
+        })
+        const addCube = async (x) => {
+            await delay(x * 600)
+            const cubeInfo = createCube([x * 20, 20, 0])
+            cubes.push(cubeInfo)
+            await cubeInfo.cube.fall()
+        }
+        const addHero = async () => {
+            await delay(1000)
+            this.scene.add(hero.object)
+            await hero.fall()
+        }
+
+        await Promise.all([...[0, 1].map(x => addCube(x)), addHero()])
+
+
+        window.hero = hero
+
+        window.addEventListener('keydown', e => {
+            console.log('keydown', e.keyCode)
+            if (e.keyCode === 32) {
+
+                if (mutex !== 0) {
+                    return
+                }
+                hero.startSquat()
+
+                mutex = 1
+            }
+            if (e.keyCode === 65) {}
+        })
+
+        window.addEventListener('keyup', async e => {
+            console.log('keyup', e.keyCode)
+            if (e.keyCode === 32) {
+                if (mutex !== 1) {
+                    return
+                }
+                mutex = 2
+
+                await Promise.all([moveCubes(), hero.stopSquat()])
+
+                mutex = 0
+            }
+        })
     }
 
     render() {
