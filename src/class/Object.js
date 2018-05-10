@@ -54,6 +54,30 @@ class Object3d {
         })
     }
 
+
+    rotateTo({
+        rotation,
+        duration = 1000,
+        easing = Tween.Easing.Linear.None
+    } = {}) {
+        return new Promise((resolve, reject) => {
+            new Tween.Tween(this.object.rotation).to(new Three.Vector3(...rotation), duration).easing(easing).onComplete(resolve).start()
+        })
+    }
+    rotateBy({
+        rotation,
+        duration = 1000,
+        easing = Tween.Easing.Linear.None
+    } = {}) {
+        return new Promise((resolve, reject) => {
+            new Tween.Tween(this.object.rotation).to(new Three.Vector3(...rotation).add(this.object.rotation), duration).easing(easing).onComplete(resolve).start()
+        })
+    }
+
+    getPosition() {
+        return this.object.position
+    }
+
     fall({
         height = 18,
         delay = 0
@@ -85,10 +109,6 @@ class Cube extends Object3d {
         })
     }
 
-    getPosition() {
-        return this.object.position
-    }
-
     getSize() {
         const {
             width,
@@ -102,19 +122,39 @@ class Cube extends Object3d {
         }
     }
 
-    contain(point) {
+    getBounding() {
         const pos = this.getPosition()
         const {
             width,
             height,
             depth
         } = this.getSize()
+        return {
+            x: {
+                max: pos.x + 0.5 * width,
+                min: pos.x - 0.5 * width,
+            },
+            y: {
+                max: pos.y + 0.5 * height,
+                min: pos.y - 0.5 * height,
+            },
+            z: {
+                max: pos.z + 0.5 * depth,
+                min: pos.z - 0.5 * depth,
+            },
+        }
+    }
+
+    contain(point) {
+        // console.log('contain para', point)
+
         if (Object.prototype.toString.apply(point) === "[object Array]") {
             point = new Three.Vector3(...point)
         }
-        return (pos.x - 0.5 * width <= point.x) && (point.x <= pos.x + 0.5 * width) &&
-        (pos.y - 0.5 * height <= point.x) && (point.y <= pos.x + 0.5 * height) &&
-        (pos.z - 0.5 * depth <= point.z) && (point.z <= pos.x + 0.5 * depth)
+        const {x, y, z} = this.getBounding() 
+        return (x.min <= point.x) && (point.x <= x.max) &&
+        (y.min <= point.y) && (point.y <= y.max) &&
+        (z.min <= point.z) && (point.z <= z.max)
     }
 }
 
@@ -129,6 +169,11 @@ class Hero {
         const material = new Three.MeshLambertMaterial({
             color
         })
+
+        this.size = {
+            head: headSize,
+            body: bodySize
+        }
 
         const head = new Three.Mesh(new Three.SphereGeometry(...headSize), material)
         const body = new Three.Mesh(new Three.CylinderGeometry(...bodySize), material)
@@ -147,17 +192,23 @@ class Hero {
         this.squatTweens = []
     }
 
-    rotate({
-        rotation,
-        duration = 1000,
-        easing = Tween.Easing.Linear.None
-    } = {}) {
-        return new Promise((resolve, reject) => {
-            new Tween.Tween(this.object.rotation).to(new Three.Vector3(...rotation).add(this.object.rotation), duration).easing(easing).onComplete(resolve).start()
-        })
+    getSize () {
+        return this.size
     }
 
-    startSquat() {
+    rotateAloneZ(z, para) {
+        console.log('z', z)
+        const size = this.getSize()
+        this.object.children.forEach(child => child.position.x -= z)
+        this.object.children.forEach(child => child.position.y += size.body[2] * .5)
+
+        this.object.position.x += z
+        this.object.position.y -= size.body[2] * .5
+        
+        return this.rotateBy(para)
+    }
+
+    startSquat(maxDuration=1500) {
         if (this.squatTweens.length || this.squatTimestamp) {
             return
         }
@@ -175,7 +226,7 @@ class Hero {
 
         function squatTween(target, delta, easing = Tween.Easing.Linear.None) {
             return {
-                tween: new Tween.Tween(target).to(new Three.Vector3(...delta).add(target), 1000).easing(easing).start(),
+                tween: new Tween.Tween(target).to(new Three.Vector3(...delta).add(target), maxDuration).easing(easing).start(),
                 target,
                 from: target.toArray()
             }
@@ -194,7 +245,7 @@ class Hero {
         }
 
         const squatDuration = new Date() - this.squatTimestamp
-        const ratio = Math.min(squatDuration / 1000, 1)
+        const squatRatio = Math.min(squatDuration / 1500, 1)
         this.squatTimestamp = null
 
         this.squatTweens.forEach(({
@@ -202,18 +253,21 @@ class Hero {
             target,
             from
         }) => {
-            restoreTween(target, from, ratio * 100)
+            restoreTween(target, from, squatRatio * 200)
             Tween.remove(tween)
         })
         this.squatTweens = []
 
-        this.jump(ratio * 10, ratio * 15, squatDuration > 200)
+        return squatRatio
+        // return {
+        //     promise: this.jump(ratio * 20, squatDuration > 200),
+        //     squatDuration
+        // }
 
-        console.log(squatDuration)
+        // console.log(squatDuration)
     }
 
-
-    async hop(duration, height) {
+    async hop(height, duration) {
         await this.moveBy({
             position: [0, height, 0],
             duration,
@@ -225,16 +279,16 @@ class Hero {
             easing: Tween.Easing.Quadratic.In
         })
     }
-    async jump(distance = 10, height = 15, rotate = true) {
-        let duration = Math.sqrt(2 * height) * 60
+    async jump(height, duration, rotate = true) {
 
-        rotate && this.rotate({
+        // console.log(duration)
+        rotate && this.rotateBy({
             rotation: [0, 0, -Math.PI * 2],
             duration: duration * 2
         }).then(() => {
             this.object.rotation.set(0, 0, 0) // 转完 2 * Pi 之后旋转清零
         })
-        await this.hop(duration, height)
+        await this.hop(height, duration)
         // for (let i = 0; i < 3; ++i) {
         //     console.log(duration, height)
         //     await this.hop(duration, height)
