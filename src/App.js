@@ -19,7 +19,8 @@ class App extends Component {
       score: 0,
       scoreColorLight: false,
       energy: 0,
-      color: '#909090'
+      color: '#909090',
+      triggerDown: false
     }
   }
 
@@ -44,7 +45,7 @@ class App extends Component {
           <div className="button" id="restart" onClick={this.reset.bind(this)}>Jump Again</div> : ""
         }
 
-        <div className="button" id="trigger" hidden={this.state.gameover} style={{color: this.state.energy > 0 ? 'gray' : 'black'}}>
+        <div className={"button " + (this.state.triggerDown ? 'down' : '')} id="trigger" hidden={this.state.gameover} style={{color: this.state.energy > 0 ? 'gray' : 'black'}}>
           <span>Biu</span>
           <i className="energy" style={{height: this.state.energy * 100 + '%', backgroundColor: this.state.color}}/>
         </div> 
@@ -65,6 +66,10 @@ class App extends Component {
 
     playground.bindEvent('score', () => this.setState({score: this.state.score + 1}) )
     playground.bindEvent('color', color => this.setState({color: toHex(color)}) )
+    playground.bindEvent('down', color => this.setState({triggerDown: true}) )
+    playground.bindEvent('up', color => this.setState({triggerDown: false}) )
+    
+    
     playground.bindEvent('energy', e =>
       new Tween.Tween().to(null, 800 + 1200 * e).easing(Tween.Easing.Quadratic.Out).onUpdate(i => this.setState({energy: e - e * i})).start()
     )

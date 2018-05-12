@@ -382,6 +382,8 @@ export class Playground {
             if (mutex !== 0) {
                 return
             }
+
+            this.dispatchEvent('down')
             this.hero.startSquat()
 
             mutex = 1
@@ -395,6 +397,7 @@ export class Playground {
                 return
             }
             mutex = 2
+            this.dispatchEvent('up')
 
             const squatRatio = this.hero.stopSquat() // [0, 1]
             const distance = squatRatio * 30
