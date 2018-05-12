@@ -9,19 +9,11 @@ import {
     Cube,
     Hero
 } from './class/Object.js'
-import {
-    COLOR
-} from './util/config.js'
+import * as COLOR from './util/color.js'
 import {
     random,
     sum
 } from 'lodash'
-import {
-    create
-} from 'handlebars';
-
-window.Tween = Tween
-window.Three = Three
 
 function delay(duration = 1000) {
     return new Promise((resolve, reject) => setTimeout(resolve, duration))
@@ -55,6 +47,7 @@ class UpdateManager {
 export class Playground {
     constructor(DEBUG = false) {
         this.DEBUG = DEBUG
+        this.MOBILE = window.innerWidth <= 480
 
         this._eventTarget = {}
         this.initThree()
@@ -62,16 +55,23 @@ export class Playground {
         this.initScene()
         this.initLight()
         this.initControl()
-        this.initObjects()
+        this.initObjects() 
+        this.initEventListener() // WARNING: binded while objects still moving!
         // this.initAnimations().then(this.initEventListener.bind(this))
     }
 
     bindEvent(key, func) {
-        Object.assign(this._eventTarget, {[key]: func})
+        Object.assign(this._eventTarget, {
+            [key]: func
+        })
     }
 
-    dispatchEvent(key) {
-        this._eventTarget[key] && this._eventTarget[key]()
+    getTrigger () {
+        return document.querySelector('#trigger')
+    }
+
+    dispatchEvent(key, ...para) {
+        this._eventTarget[key] && this._eventTarget[key](...para)
     }
 
     initThree() {
@@ -84,6 +84,10 @@ export class Playground {
 
 
         if (this.DEBUG) {
+
+            window.Tween = Tween
+            window.Three = Three
+
             this.gui = new dat.GUI()
             this.guiParams = {
                 camera_x: 0,
@@ -109,7 +113,7 @@ export class Playground {
         this.camera = new Three.OrthographicCamera(-window.innerWidth / 2, window.innerWidth / 2, window.innerHeight / 2, -window.innerHeight / 2, -1000, 1000);
 
         this.camera.position.set(-20, 14, 16)
-        this.camera.zoom = 15
+        this.camera.zoom = this.MOBILE ? 10.5 : 15
         this.camera.clearViewOffset()
 
         if (this.DEBUG) {
@@ -134,6 +138,15 @@ export class Playground {
         this.scene = new Three.Scene()
         this.scene.fog = new Three.FogExp2(COLOR.white, 0.01)
 
+        const floorGeometry = new Three.PlaneBufferGeometry(200, 200);
+        const floorMaterial = new Three.MeshPhongMaterial({
+            color: COLOR.lightGray
+        })
+        const floorMesh = new Three.Mesh(floorGeometry, floorMaterial);
+        floorMesh.receiveShadow = true;
+        floorMesh.rotation.x = -Math.PI / 2.0;
+        this.scene.add(floorMesh);
+
         if (this.DEBUG) {
             Object.assign(this.guiParams, {
                 fog: 0.01
@@ -143,6 +156,9 @@ export class Playground {
             UpdateManager.getInstance().addUpdateFunction(this, function () {
                 this.scene.fog = new Three.FogExp2(COLOR.white, this.guiParams.fog)
             })
+
+            const helper = new Three.GridHelper(600, 60, COLOR.red, COLOR.darkGray);
+            this.scene.add(helper);
         }
     }
     initLight() {
@@ -186,25 +202,12 @@ export class Playground {
     }
     initControl() {
         this.controls = new OrbitControls(this.camera, this.renderer.domElement)
+        if (!this.DEBUG) {
+            this.controls.dispose()
+        }
     }
     async initObjects() {
         this.manager = UpdateManager.getInstance()
-
-        if (this.DEBUG) {
-            const helper = new Three.GridHelper(600, 60, COLOR.red, COLOR.darkGray);
-            this.scene.add(helper);
-        }
-
-        const floorGeometry = new Three.PlaneBufferGeometry(200, 200);
-        const floorMaterial = new Three.MeshPhongMaterial({
-            color: COLOR.lightGray
-        })
-        const floorMesh = new Three.Mesh(floorGeometry, floorMaterial);
-        floorMesh.receiveShadow = true;
-        floorMesh.rotation.x = -Math.PI / 2.0;
-        this.scene.add(floorMesh);
-
-
 
         const hero = new Hero({
             position: [0, 24, 0]
@@ -215,157 +218,205 @@ export class Playground {
             await hero.fall()
         }
 
-        // this.cubes = cubes
-        // this.hero = hero
-
         const cubes = []
-        const addCube = async (distance) => { // [15, 30] with step 5
 
-            const cube = new Cube({
-                position: [distance, 20, 0]
-            })
-            this.scene.add(cube.object)
-            cubes.push(cube)
-            await cube.fall()
+        this.hero = hero
+        this.cubes = cubes
 
-            if (cubes.length > 6) {
-                const dumpedCube = cubes.splice(0, 1)[0]
-                this.scene.remove(dumpedCube.object)
-            }
+        if (this.DEBUG) {
+            window.cubes = cubes
+            window.hero = hero
         }
-
-
-        window.cubes = cubes
-        window.hero = hero
 
         await Promise.all([...[0, 1].map(async x => {
             await delay(x * 600)
-            await addCube(x * 20)
+            await this.addCube(x * 20)
         }), addHero()])
+    } 
 
+    async addCube (distance) { // [15, 30] with step 5
+        const cubes = this.cubes
+        const cube = new Cube({
+            position: [distance, 20, 0]
+        })
+        this.scene.add(cube.object)
+        cubes.push(cube)
+        await cube.fall()
 
-        // const hero = this.hero
-        // const cubes = this.cubes
-
-        const moveCubes = async (distance, duration) => {
-            console.log(duration)
-            await Promise.all(cubes.map(cube => {
-                cube.moveBy({
-                    position: [-distance, 0, 0],
-                    duration,
-                    easing: Tween.Easing.Sinusoidal.Out
-                })
-            }))
+        if (cubes.length > 6) {
+            const dumpedCube = cubes.splice(0, 1)[0]
+            this.scene.remove(dumpedCube.object)
         }
+    }
+
+    async moveCubes (distance, duration) {
+        console.log(duration)
+        await Promise.all(this.cubes.map(cube => {
+            cube.moveBy({
+                position: [-distance, 0, 0],
+                duration,
+                easing: Tween.Easing.Sinusoidal.Out
+            })
+        }))
+    }
+
+    async collisionDetection (jumpHeight, jumpDuration) {
+        // if (heroFailed) {
+        //     endGame()
+        // } else if (heroOnLastCube) {
+        //     createNewCube
+        // {}
+        const hero = this.hero
+        const cubes = this.cubes
+        const size = hero.getSize().body
+        const {
+            x,
+            y,
+            z
+        } = hero.getPosition()
+
+
+        let flag = 1
+        for (let cube of cubes.slice(-2).reverse()) {
+            const dots = [-size[1], 0, size[1]].map(d => cube.contain([x + d, y - size[2], z]))
+
+            if (sum(dots) >= 2) {
+                // land on
+                if (flag) {
+                    this.dispatchEvent('score')
+                    this.dispatchEvent('color', cube.color)
+                    await this.addCube(cube.getPosition().x + random(4, 10) * 3)
+                }
+                break
+            } else if (sum(dots) === 1) {
+                if (!dots[0]) {
+                    // Fall from left
+                    console.log('Fall from left')
+                    const axis = cube.getBounding().x.min
+                    await hero.rotateAloneZ(axis, {
+                        rotation: [0, 0, Math.PI / 2],
+                        easing: Tween.Easing.Bounce.Out
+                    })
+                    await hero.moveBy({
+                        position: [0, -6, 0]
+                    })
+                    await this.gameover()
+                } else {
+                    // Fall from right
+                    console.log('Fall from right')
+
+                    const axis = cube.getBounding().x.max
+                    await hero.rotateAloneZ(axis, {
+                        rotation: [0, 0, -Math.PI / 2],
+                        easing: Tween.Easing.Bounce.Out
+                    })
+                    await hero.moveBy({
+                        position: [0, -6, 0]
+                    })
+                    await this.gameover()
+                }
+                break
+            } else {
+                flag -= 1
+            }
+        }
+        if (flag === -1) {
+            const down = 10
+            const deltaT = 60 * (Math.sqrt(2 * jumpHeight + 2 * down) - Math.sqrt(2 * jumpHeight))
+
+            const h = jumpHeight
+            const d = down
+            const dt = deltaT
+            const t0 = jumpDuration
+
+            const easing = x => h * dt * dt / d / t0 / t0 * x * x + 2 * h * dt / d / t0 * x
+
+            await hero.moveBy({
+                position: [0, -down, 0],
+                duration: deltaT,
+                easing
+            })
+            await this.gameover()
+        }
+    }
+
+    async gameover () {
+        const cubes = this.cubes
+
+        console.log('Gameover!')
+        this.dispatchEvent('gameover', cubes.slice(-1)[0].color)
+
+        const shouldLookAt = cubes.slice(-2).map(c => c.getPosition().toArray()).reduce((s, c) => s.map((x, i) => x + c[i] * .5), [0, 0, 0])
+        let lookAt = [0, 0, 0]
+
+        const {x, y, z} = this.camera.position
+        const r = Math.sqrt(x * x + z * z)
+        const theta0 = Math.atan(x / z)
+        
+        const circle = () => {
+            // console.log('circle')
+            new Tween.Tween().to(null, 20000).onUpdate(ratio => {
+                const theta = ratio * Math.PI * 2 + theta0
+                this.camera.position.x = lookAt[0] + r * Math.sin(theta)
+                this.camera.position.z = lookAt[2] + r * Math.cos(theta)
+                this.camera.position.y = y
+                this.camera.lookAt(...lookAt)
+
+                // console.log(this.camera.position.toArray())
+                // console.log(theta, lookAt)
+            }).onComplete(circle).start()
+        }
+    
+        new Tween.Tween(lookAt).to(shouldLookAt, 10000).start()
+        circle()
+    }
+
+    initEventListener () {
 
         let mutex = 0
 
-        window.addEventListener('keydown', e => {
-            console.log('keydown', e.keyCode)
-            if (e.keyCode === 32) {
+        const down = e => {
+            // console.log('keydown', e.keyCode)
+            // if (e.keyCode === 32) {
 
-                if (mutex !== 0) {
-                    return
-                }
-                hero.startSquat()
-
-                mutex = 1
+            if (mutex !== 0) {
+                return
             }
-            if (e.keyCode === 65) {}
-        })
+            this.hero.startSquat()
 
-
-        const collisionDetection = async (jumpHeight, jumpDuration) => {
-            // if (heroFailed) {
-            //     endGame()
-            // } else if (heroOnLastCube) {
-            //     createNewCube
-            // {}
-            const size = hero.getSize().body
-            const { x, y ,z } = hero.getPosition()
-
-
-            let flag = 1
-            for (let cube of cubes.slice(-2).reverse()) {
-                const dots = [-size[1], 0, size[1]].map(d => cube.contain([x + d, y - size[2], z]))
-            
-                if (sum(dots) >= 2) {
-                    // land on
-                    if (flag) {
-                        this.dispatchEvent('score')
-                        await addCube(cube.getPosition().x + random(4, 10) * 3)
-                    }
-                    break
-                } else if (sum(dots) === 1) {
-                    if (!dots[0]) {
-                        // Fall from left
-                        console.log('Fall from left')
-                        const axis = cube.getBounding().x.min
-                        await hero.rotateAloneZ(axis, {rotation: [0, 0, Math.PI / 2], easing: Tween.Easing.Bounce.Out})
-                        await hero.moveBy({position: [0, -6, 0]})
-                        await gameover()
-                    } else {
-                        // Fall from right
-                        console.log('Fall from right')
-
-                        const axis = cube.getBounding().x.max
-                        await hero.rotateAloneZ(axis, {rotation: [0, 0, -Math.PI / 2], easing: Tween.Easing.Bounce.Out})
-                        await hero.moveBy({position: [0, -6, 0]})
-                        await gameover()
-                    }
-                    break
-                } else {
-                    flag -= 1
-                }
-            }
-            if (flag === -1) {
-                const down = 10
-                const deltaT = 60 * (Math.sqrt(2 * jumpHeight + 2 * down) - Math.sqrt(2 * jumpHeight))
-
-                const h = jumpHeight
-                const d = down
-                const dt = deltaT
-                const t0 = jumpDuration
-                
-                const easing = x => h * dt * dt / d / t0 / t0 * x * x + 2 * h * dt / d / t0 * x
-
-                await hero.moveBy({position: [0, -down, 0], duration: deltaT, easing })
-                await gameover()
-            }
+            mutex = 1
+            // }
+            // if (e.keyCode === 65) {}
         }
-
-        const gameover = async () => {
-            console.log('Gameover!')
-            this.dispatchEvent('gameover')
-            
-            const last = cubes.slice(-1)[0]
-            const move = last.moveTo.call({object: this.camera}, {position: last.getPosition().toArray()})
-            const rotate = last.rotateTo.call({object: this.camera}, {rotation: [-Math.PI / 2, 0, -Math.PI / 2]})
-            // new Tween.Tween(this.camera).to({zoom: 60}, 1000).easing(Tween.Easing.Linear.None.).onComplete(resolve).start()
-        }
-
-        window.addEventListener('keyup', async e => {
-            console.log('keyup', e.keyCode)
-            if (e.keyCode === 32) {
-                if (mutex !== 1) {
-                    return
-                }
-                mutex = 2
-
-                const squatRatio = hero.stopSquat() // [0, 1]
-                const distance = squatRatio * 30
-                const height = squatRatio * 20
-
-                const duration = Math.sqrt(2 * height) * 60
-
-                await Promise.all([moveCubes(distance, duration * 2), hero.jump(height, duration, squatRatio > 0.2)])
-
-                await collisionDetection(height, duration)
-                // await Promise.all([moveCubes(), hero.stopSquat()])
-
-                mutex = 0
+        const up = async e => {
+            // console.log('keyup', e.keyCode)
+            // if (e.keyCode === 32) {
+            if (mutex !== 1) {
+                return
             }
-        })
+            mutex = 2
+
+            const squatRatio = this.hero.stopSquat() // [0, 1]
+            const distance = squatRatio * 30
+            const height = squatRatio * 20
+
+            const duration = Math.sqrt(2 * height) * 60
+
+            this.dispatchEvent('energy', squatRatio)
+
+            await Promise.all([this.moveCubes(distance, duration * 2), this.hero.jump(height, duration, squatRatio > 0.2)])
+
+            await this.collisionDetection(height, duration)
+
+            mutex = 0
+            // }
+        }
+        
+        this.getTrigger().addEventListener('mousedown', down)
+        this.getTrigger().addEventListener('touchstart', down)
+        this.getTrigger().addEventListener('mouseup', up)
+        this.getTrigger().addEventListener('touchend', up)
+        this.getTrigger().addEventListener('touchcancel', up)
     }
 
     render() {
@@ -393,6 +444,20 @@ export class Playground {
             cancelAnimationFrame(this.animationFrame)
         }
         this.animationFrame = null
+    }
+
+    reset () {
+        Tween.removeAll()
+
+        this.camera.position.set(-20, 14, 16)
+        this.camera.zoom = this.MOBILE ? 10.5 : 15
+        this.camera.lookAt(0, 0, 0)
+        this.camera.clearViewOffset()
+
+        this.cubes.forEach(cube => this.scene.remove(cube.object))
+        this.scene.remove(this.hero.object)
+
+        this.initObjects()
     }
 
     getDomElement() {

@@ -4,9 +4,7 @@ import Tween from 'tween.js'
 import {
     random
 } from 'lodash'
-import {
-    COLOR
-} from '../util/config.js'
+import * as COLOR from '../util/color.js'
 
 class Object3d {
     constructor({
