@@ -247,11 +247,13 @@ export class Playground {
         const lastCubePos = lastCube ? lastCube.getPosition().toArray() : [0, 0, 0]
         directionX = directionX || random(0, 9) % 2
 
+        console.log(distance, lastCubePos)
+
         const cube = directionX ? new Cube({
-            position: [distance, 20, lastCubePos[2]],
+            position: [lastCubePos[0] + distance, 20, lastCubePos[2]],
             direction: 'X'
         }) : new Cube({
-            position: [lastCubePos[0], 20, -distance],
+            position: [lastCubePos[0], 20, lastCubePos[2] - distance],
             direction: 'Z'
         })
         this.scene.add(cube.object)
@@ -265,7 +267,7 @@ export class Playground {
     }
 
     async moveCubes (distance, duration) {
-        console.log(duration)
+        // console.log(duration)
         const toX = this.getLastCube().direction === 'X'
         await Promise.all(this.cubes.map(cube => {
             cube.moveBy({
@@ -294,19 +296,21 @@ export class Playground {
 
         let flag = 1
         for (let cube of cubes.slice(-2).reverse()) {
-            const dots = [-size[1], 0, size[1]].map(d => cube.contain([x + d, y - size[2], z]))
+            const dotsX = [-size[1], 0, size[1]].map(d => cube.contain([x + d, y - size[2], z]))
+            const dotsZ = [-size[1], 0, size[1]].map(d => cube.contain([x, y - size[2], z + d]))
+            
 
-            if (sum(dots) >= 2) {
+            if (sum(dotsX) >= 2 && sum(dotsZ) >= 2) {
                 // land on
                 if (flag) {
                     this.dispatchEvent('score')
                     this.dispatchEvent('color', cube.color)
-                    await this.addCube(cube.getPosition().x + random(4, 10) * 3)
+                    await this.addCube(random(4, 10) * 3)
                 }
                 break
-            } else if (sum(dots) === 1) {
-                if (!dots[0]) {
-                    // Fall from left
+            } else if (sum(dotsX) === 1) {
+                if (!dotsX[0]) {
+                    // Fall from x-
                     console.log('Fall from left')
                     const axis = cube.getBounding().x.min
                     await hero.rotateAloneZ(axis, {
@@ -318,12 +322,40 @@ export class Playground {
                     })
                     await this.gameover()
                 } else {
-                    // Fall from right
+                    // Fall from x+
                     console.log('Fall from right')
 
                     const axis = cube.getBounding().x.max
                     await hero.rotateAloneZ(axis, {
                         rotation: [0, 0, -Math.PI / 2],
+                        easing: Tween.Easing.Bounce.Out
+                    })
+                    await hero.moveBy({
+                        position: [0, -6, 0]
+                    })
+                    await this.gameover()
+                }
+                break
+            } else if (sum(dotsZ) === 1) {
+                if (!dotsZ[0]) {
+                    // Fall from z-
+                    console.log('Fall from z-')
+                    const axis = cube.getBounding().z.min
+                    await hero.rotateAloneX(axis, {
+                        rotation: [-Math.PI / 2, 0, 0],
+                        easing: Tween.Easing.Bounce.Out
+                    })
+                    await hero.moveBy({
+                        position: [0, -6, 0]
+                    })
+                    await this.gameover()
+                } else {
+                    // Fall from z+
+                    console.log('Fall from z+')
+
+                    const axis = cube.getBounding().z.max
+                    await hero.rotateAloneX(axis, {
+                        rotation: [Math.PI / 2, 0, 0],
                         easing: Tween.Easing.Bounce.Out
                     })
                     await hero.moveBy({

@@ -208,6 +208,18 @@ class Hero {
         return this.rotateBy(para)
     }
 
+    rotateAloneX(x, para) {
+        console.log('x', x)
+        const size = this.getSize()
+        this.object.children.forEach(child => child.position.z -= x)
+        this.object.children.forEach(child => child.position.y += size.body[2] * .5)
+
+        this.object.position.z += x
+        this.object.position.y -= size.body[2] * .5
+        
+        return this.rotateBy(para)
+    }
+
     startSquat(maxDuration=1500) {
         if (this.squatTweens.length || this.squatTimestamp) {
             return
