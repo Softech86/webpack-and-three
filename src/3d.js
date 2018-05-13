@@ -15,6 +15,8 @@ import {
     sum
 } from 'lodash'
 
+window.random = random
+
 function delay(duration = 1000) {
     return new Promise((resolve, reject) => setTimeout(resolve, duration))
 }
@@ -206,6 +208,7 @@ export class Playground {
             this.controls.dispose()
         }
     }
+
     async initObjects() {
         this.manager = UpdateManager.getInstance()
 
@@ -230,14 +233,26 @@ export class Playground {
 
         await Promise.all([...[0, 1].map(async x => {
             await delay(x * 600)
-            await this.addCube(x * 20)
+            await this.addCube(x * 20, true)
         }), addHero()])
     } 
 
-    async addCube (distance) { // [15, 30] with step 5
+    getLastCube () {
+        return this.cubes.slice(-1)[0]
+    }
+
+    async addCube (distance, directionX) { // [15, 30] with step 5
         const cubes = this.cubes
-        const cube = new Cube({
-            position: [distance, 20, 0]
+        const lastCube = this.getLastCube()
+        const lastCubePos = lastCube ? lastCube.getPosition().toArray() : [0, 0, 0]
+        directionX = directionX || random(0, 9) % 2
+
+        const cube = directionX ? new Cube({
+            position: [distance, 20, lastCubePos[2]],
+            direction: 'X'
+        }) : new Cube({
+            position: [lastCubePos[0], 20, -distance],
+            direction: 'Z'
         })
         this.scene.add(cube.object)
         cubes.push(cube)
@@ -251,9 +266,10 @@ export class Playground {
 
     async moveCubes (distance, duration) {
         console.log(duration)
+        const toX = this.getLastCube().direction === 'X'
         await Promise.all(this.cubes.map(cube => {
             cube.moveBy({
-                position: [-distance, 0, 0],
+                position: toX ? [-distance, 0, 0] : [0, 0, distance],
                 duration,
                 easing: Tween.Easing.Sinusoidal.Out
             })
@@ -344,7 +360,7 @@ export class Playground {
         const cubes = this.cubes
 
         console.log('Gameover!')
-        this.dispatchEvent('gameover', cubes.slice(-1)[0].color)
+        this.dispatchEvent('gameover', this.getLastCube().color)
 
         const shouldLookAt = cubes.slice(-2).map(c => c.getPosition().toArray()).reduce((s, c) => s.map((x, i) => x + c[i] * .5), [0, 0, 0])
         let lookAt = [0, 0, 0]
@@ -399,6 +415,7 @@ export class Playground {
             mutex = 2
             this.dispatchEvent('up')
 
+            const toX = this.getLastCube().direction === 'X'
             const squatRatio = this.hero.stopSquat() // [0, 1]
             const distance = squatRatio * 30
             const height = squatRatio * 20
@@ -407,7 +424,8 @@ export class Playground {
 
             this.dispatchEvent('energy', squatRatio)
 
-            await Promise.all([this.moveCubes(distance, duration * 2), this.hero.jump(height, duration, squatRatio > 0.2)])
+
+            await Promise.all([this.moveCubes(distance, duration * 2), this.hero.jump(height, duration, squatRatio > 0.2, toX)])
 
             await this.collisionDetection(height, duration)
 

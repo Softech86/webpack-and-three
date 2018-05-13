@@ -93,6 +93,7 @@ class Cube extends Object3d {
     constructor({
         size = [10, 4, 10], // [width, height, depth]
         position = [0, 20, 0],
+        direction = 'X',
         color
     } = {}) {
 
@@ -105,6 +106,7 @@ class Cube extends Object3d {
             position,
             color
         })
+        this.direction = direction
     }
 
     getSize() {
@@ -277,11 +279,11 @@ class Hero {
             easing: Tween.Easing.Quadratic.In
         })
     }
-    async jump(height, duration, rotate = true) {
+    async jump(height, duration, rotate = true, rotateXDirection = true) {
 
         // console.log(duration)
         rotate && this.rotateBy({
-            rotation: [0, 0, -Math.PI * 2],
+            rotation: [0, 0, (rotateXDirection ? -1 : 1) * Math.PI * 2],
             duration: duration * 2
         }).then(() => {
             this.object.rotation.set(0, 0, 0) // 转完 2 * Pi 之后旋转清零
