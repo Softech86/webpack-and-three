@@ -15,7 +15,6 @@ import {
     sum
 } from 'lodash'
 
-window.random = random
 
 function delay(duration = 1000) {
     return new Promise((resolve, reject) => setTimeout(resolve, duration))
@@ -171,7 +170,6 @@ export class Playground {
         spotLight.position.set(30, 100, 20)
         spotLight.castShadow = true
 
-        console.log(spotLight.shadow.mapSize)
         spotLight.shadow.mapSize.width = 4096;
         spotLight.shadow.mapSize.height = 4096;
 
@@ -184,6 +182,7 @@ export class Playground {
         this.scene.add(spotLight)
 
         if (this.DEBUG) {
+            console.log(spotLight.shadow.mapSize)
             this.scene.add(new Three.SpotLightHelper(spotLight))
 
             Object.assign(this.guiParams, {
@@ -247,7 +246,7 @@ export class Playground {
         const lastCubePos = lastCube ? lastCube.getPosition().toArray() : [0, 0, 0]
         directionX = directionX || random(0, 9) % 2
 
-        console.log(distance, lastCubePos)
+        // console.log(distance, lastCubePos)
 
         const cube = directionX ? new Cube({
             position: [lastCubePos[0] + distance, 20, lastCubePos[2]],
@@ -311,7 +310,7 @@ export class Playground {
             } else if (sum(dotsX) === 1) {
                 if (!dotsX[0]) {
                     // Fall from x-
-                    console.log('Fall from left')
+                    console.log('Fall from x-')
                     const axis = cube.getBounding().x.min
                     await hero.rotateAloneZ(axis, {
                         rotation: [0, 0, Math.PI / 2],
@@ -323,7 +322,7 @@ export class Playground {
                     await this.gameover()
                 } else {
                     // Fall from x+
-                    console.log('Fall from right')
+                    console.log('Fall from x+')
 
                     const axis = cube.getBounding().x.max
                     await hero.rotateAloneZ(axis, {
